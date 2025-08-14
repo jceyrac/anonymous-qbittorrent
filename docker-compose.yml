@@ -1,0 +1,60 @@
+version: "3.8"
+
+services:
+  gluetun:
+    image: qmcgaw/gluetun:v3.40.0
+version: "3.8"
+
+services:
+  gluetun:
+    image: qmcgaw/gluetun:v3.40.0
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    ports:
+      - "WEBUI_PORT:WEBUI_PORT/tcp"   # qBittorrent WebUI
+    environment:
+      # WebUI Configuration
+      - FIREWALL_VPN_INPUT_PORTS=WEBUI_PORT,${FORWARDED_PORT}
+      - FIREWALL_OUTBOUND_SUBNETS=YOUR_SERVER_IP/32
+
+      # VPN Configuration
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=YOUR_WIREGUARD_PRIVATE_KEY
+      - WIREGUARD_ADDRESSES=10.X.X.X/32
+
+      # Server Selection
+      - SERVER_HOSTNAMES=vpn-server-XX.protonvpn.net
+
+      # Port Forwarding
+      - VPN_PORT_FORWARDING=on
+      - VPN_PORT_FORWARDING_STATUS_FILE=/gluetun/forwarded_port
+
+      # Network Settings
+      - WIREGUARD_IMPLEMENTATION=auto
+      - TZ=Your_Timezone
+
+    volumes:
+      - ./gluetun:/gluetun
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    network_mode: "service:gluetun"
+    environment:
+      - QBITTORRENT_LISTEN_PORT=${FORWARDED_PORT}
+      - PUID=USER_ID
+      - PGID=GROUP_ID
+      - TZ=Your_Timezone
+      - WEBUI_PORT=WEBUI_PORT
+    volumes:
+      - ./qbittorrent:/config
+      - /mnt/external_storage:/downloads
+      - ./update-port.sh:/etc/cont-init.d/10-update-port
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    restart: unless-stopped
